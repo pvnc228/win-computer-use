@@ -1,107 +1,108 @@
 # win-computer-use
 
-**High-Performance Windows Desktop Automation & Computer Use Bridge** leveraging the OpenAI Codex CUA native engine (`SendInput`, `UI Automation`, `Windows.Graphics.Capture`).
+**High-Performance Windows Desktop Automation & Computer Use Bridge** leveraging the native OpenAI Codex CUA engine (`SendInput`, `UI Automation`, `Windows.Graphics.Capture`).
 
 ---
 
-## 📋 Prerequisites (Что нужно для работы)
+## 📋 Prerequisites
 
-Для работы приложения требуются:
+To run this library, you need:
 
-1. **Операционная система**:
-   - Windows 10 или Windows 11 (64-bit).
+1. **Operating System**:
+   - Windows 10 or Windows 11 (64-bit).
 2. **Python**:
-   - Python 3.10+ (используются **только** стандартные библиотеки `ctypes`, `subprocess`, `json`, сторонних pip-зависимостей нет).
-3. **Установленный OpenAI Codex / ChatGPT Desktop**:
-   - Данная библиотека работает как нативный мост к бинарному хелперу автоматизации `codex-computer-use.exe`, поставляемому в составе официального приложения OpenAI Codex / ChatGPT Desktop для Windows.
-   - **Где он находится:** при установке Codex/ChatGPT бинарник автоматически распаковывается в:
+   - Python 3.10+ (**Zero external pip dependencies** — built purely using Python's standard library: `ctypes`, `subprocess`, and `json`).
+3. **OpenAI Codex or ChatGPT Desktop for Windows**:
+   - This library acts as a native bridge to the local helper daemon `codex-computer-use.exe`, which is bundled with the official OpenAI Codex / ChatGPT Desktop application for Windows.
+   - **Default Location:** When ChatGPT Desktop or Codex is installed, the helper binary is automatically unpackaged to:
      ```
      %LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node\<hash>\bin\node_modules\@oai\sky\bin\windows\codex-computer-use.exe
      ```
-   - **Подписка / Онлайн:** Для работы самого движка автоматизации подключение к серверам OpenAI или платная подписка **не требуются** — бинарник исполняется полностью локально на вашем компьютере как фоновый Win32/UIA демон.
-   - **Автоматическое обнаружение:** Библиотека автоматически сканирует `%LOCALAPPDATA%\OpenAI\Codex` и находит актуальную версию бинарника, даже если хэш директории изменится после обновления приложения.
-   - *(Опционально)* Если файл находится в нестандартном месте, путь можно задать через переменную окружения:
+   - **No Subscription / Offline Execution:** An active ChatGPT Plus subscription or cloud API key is **not required**. The helper binary executes 100% locally on your machine as an independent Win32/UIA automation process.
+   - **Dynamic Auto-Discovery:** The client automatically scans `%LOCALAPPDATA%\OpenAI\Codex` and resolves the latest version of the binary, ensuring future app updates with new folder hashes work seamlessly without manual configuration.
+   - *(Optional)* If the binary is stored in a custom directory, you can override its path using an environment variable:
      ```powershell
      $env:CODEX_CUA_HELPER_PATH = "C:\Path\To\codex-computer-use.exe"
      ```
 
 ---
 
-## 🌟 Ключевые возможности и решённые проблемы
+## 🌟 Key Features & Solved Architecture Challenges
 
-- **Обход изоляции десктопов Windows (WinSta0\Default Bridge):**
-  Агенты вроде Antigravity или Claude Code по умолчанию выполняют команды в скрытом изолированном десктопе (`exebox-...`), где нет окон пользователя. Наш клиент использует прямой Win32 `CreateProcessW` с явной привязкой к интерактивному десктопу `WinSta0\Default`, предоставляя агенту полный доступ к реальному рабочему столу.
-- **Автоматический обход подтверждений (Auto-Approval Loop):**
-  В движок CUA встроена защита прав приложений: при первом обращении он возвращает `approvalRequest`. Наш клиент автоматически перехватывает этот ответ и подставляет заголовок авторизации `x-oai-cua-approved-app`, исключая застревание скриптов.
-- **Аппаратный хранитель курсора (Hardware Cursor Guardian):**
-  Драйвер OpenAI CUA скрывает физический курсор мыши при автоматизации. В библиотеку встроен сторож курсора, который при любом выходе, ошибке или сигнале завершения гарантированно восстанавливает системные указатели Windows через `SPI_SETCURSORS` и `ShowCursor`.
-- **Скриншоты перекрытых окон (WGC):**
-  Скриншоты создаются через `Windows.Graphics.Capture`, что позволяет делать снимки окон, даже если они полностью закрыты другими окнами.
+- **Desktop Isolation Bypass (`WinSta0\Default` Bridge):**
+  AI coding agents (such as Antigravity or Claude Code) run commands in isolated sandbox desktops (`exebox-...`), where normal interactive user windows are inaccessible. Our bridge explicitly launches processes onto `WinSta0\Default` via Win32 `CreateProcessW`, granting full visibility into the user's desktop windows.
+- **Auto-Approval Loop:**
+  The CUA engine implements an authorization layer that halts when targeting a new app process with an `approvalRequest`. Our client automatically intercepts this prompt, applies the appropriate `x-oai-cua-approved-app` authorization metadata, and retries the command seamlessly without blocking.
+- **Hardware Cursor Guardian:**
+  The native OpenAI driver hides the hardware mouse pointer during automation sessions (`SetSystemCursor`). Our client includes a built-in cursor guardian that resets system cursors (`SPI_SETCURSORS` and `ShowCursor`) upon exit, error, or interruption, preventing cursor freeze.
+- **Occluded Window Capture (WGC):**
+  Screenshots are captured via `Windows.Graphics.Capture`, allowing crisp window state captures even when windows are completely covered by other applications or in the background.
 - **Stdio MCP Server:**
-  Готовый сервер протокола Model Context Protocol (MCP) для подключения к Antigravity, Claude Code, Cursor и другим AI-ассистентам.
+  Includes a fully compliant Model Context Protocol (MCP) server ready to integrate with Antigravity, Claude Code, Cursor, or any other agent environment.
 
 ---
 
-## 🚀 Использование через CLI
+## 🚀 Quick Start (CLI)
 
-Запуск из директории проекта:
+Run directly from the terminal:
 
 ```powershell
-# 1. Список активных окон на рабочем столе:
+# 1. List active windows on the desktop:
 python -m win_computer_use list
 
-# 2. Вывести окно на передний план:
+# 2. Bring a window to foreground:
 python -m win_computer_use activate "Chrome"
 
-# 3. Кликнуть точно в геометрический центр окна (пауза видео, фокус):
+# 3. Click exactly in the center of a window (e.g. toggle video playback):
 python -m win_computer_use click-center "Chrome"
 
-# 4. Кликнуть по относительным координатам окна:
+# 4. Click specific window-relative coordinates:
 python -m win_computer_use click "Chrome" --x 637 --y 492
 
-# 5. Сделать скриншот окна (сохраняется в PNG):
+# 5. Capture a window screenshot to PNG:
 python -m win_computer_use screenshot "Hearthstone" --out hs.png
 
-# 6. Напечатать текст в активный элемент ввода:
-python -m win_computer_use type "Notepad" "Привет из Antigravity"
+# 6. Type text into active control:
+python -m win_computer_use type "Notepad" "Hello from Antigravity"
 
-# 7. Нажать горячую клавишу или сочетание:
+# 7. Press keyboard shortcut / chord:
 python -m win_computer_use press "Chrome" "Control_L+w"
 
-# 8. Прогнать переключение по всем активным окнам (с задержкой 1 сек):
+# 8. Cycle through all open interactive windows (1s delay each):
 python -m win_computer_use cycle --delay 1.0
 
-# 9. Экстренное восстановление курсора:
+# 9. Emergency cursor restore:
 python -m win_computer_use restore-cursor
 ```
 
 ---
 
-## 🐍 Использование в Python
+## 🐍 Python API
 
 ```python
 from win_computer_use import ComputerUseClient
 
-# Контекстный менеджер автоматически завершает сессию и восстанавливает курсор
+# Context manager automatically cleans up sessions and restores cursor
 with ComputerUseClient() as cua:
-    # Поиск окна по подстроке заголовка или HWND
+    # 1. Find target window by title substring or HWND
     target = cua.find_window("Google Chrome")
     if target:
+        # 2. Activate window
         cua.activate_window(target)
         
-        # Клик в центр окна
+        # 3. Click at center
         cua.click_center(target)
         
-        # Захват скриншота
+        # 4. Capture screenshot
         meta = cua.save_screenshot(target, "chrome_state.png")
-        print(f"Скриншот сохранён: {meta['path']} ({meta['width']}x{meta['height']})")
+        print(f"Screenshot saved: {meta['path']} ({meta['width']}x{meta['height']})")
 ```
 
 ---
 
-## 🤖 Подключение MCP-сервера в AI-агенты
+## 🤖 MCP Server Setup for AI Agents
 
-Для добавления инструментов Computer Use в Antigravity, Claude Desktop или другие клиенты MCP добавьте блок в конфигурацию (`mcp_config.json`):
+To add Windows Computer Use capabilities to your AI agent (Antigravity, Claude Desktop, Cursor), add this entry to your MCP configuration file (`mcp_config.json` or `config.toml`):
 
 ```json
 {
@@ -114,19 +115,19 @@ with ComputerUseClient() as cua:
 }
 ```
 
-### Доступные инструменты (MCP Tools):
-- `computer_list_windows` — получить список открытых пользовательских окон.
-- `computer_activate_window` — вывести окно на передний план.
-- `computer_get_window_state` — получить снимок и координаты окна.
-- `computer_click` — клик по координатам внутри окна.
-- `computer_click_center` — клик точно в центр окна.
-- `computer_type_text` — ввод текста в фокус.
-- `computer_press_key` — отправка клавиатурного сочетания / клавиши.
-- `computer_scroll` — прокрутка колеса мыши.
-- `computer_restore_cursor` — сброс скрытого курсора в нормальный режим.
+### Exposed MCP Tools:
+- `computer_list_windows` — Retrieve active, interactive application windows.
+- `computer_activate_window` — Bring target window to foreground.
+- `computer_get_window_state` — Capture screenshot and coordinate bounds.
+- `computer_click` — Click at window-relative coordinates.
+- `computer_click_center` — Click at the exact geometric center of a window.
+- `computer_type_text` — Type text into active input focus.
+- `computer_press_key` — Send key or chord shortcut (e.g. `Return`, `Tab`, `Escape`).
+- `computer_scroll` — Scroll by horizontal and vertical delta.
+- `computer_restore_cursor` — Emergency hardware cursor restoration.
 
 ---
 
-## 📄 Лицензия
+## 📄 License
 
 MIT License.

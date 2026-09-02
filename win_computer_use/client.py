@@ -240,9 +240,15 @@ class ComputerUseClient:
         if not filter_system:
             return raw_windows
 
+        # Common Windows background/system shells (English & localized aliases)
         ignore = [
-            "cua.agentcursoroverlay", "program manager", "переключение задач",
-            "окно переполнения", "индикатор батарей", "действия в реальном времени"
+            "cua.agentcursoroverlay",
+            "program manager",
+            "task switching", "\u043f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0435 \u0437\u0430\u0434\u0430\u0447",
+            "notification overflow", "\u043e\u043a\u043d\u043e \u043f\u0435\u0440\u0435\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u044f",
+            "battery indicator", "\u0438\u043d\u0434\u0438\u043a\u0430\u0442\u043e\u0440 \u0431\u0430\u0442\u0430\u0440\u0435\u0439",
+            "real-time actions", "\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f \u0432 \u0440\u0435\u0430\u043b\u044c\u043d\u043e\u043c \u0432\u0440\u0435\u043c\u0435\u043d\u0438",
+            "windows input experience", "\u0438\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441 \u0432\u0432\u043e\u0434\u0430 windows"
         ]
         filtered = []
         seen = set()
