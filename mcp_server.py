@@ -1,321 +1,179 @@
 import sys
+import os
 import json
 import traceback
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+
+# Ensure project package is importable
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
 from win_computer_use.client import ComputerUseClient
 from win_computer_use.cursor import restore_system_cursor
 
-TOOLS = [
-    {
-        "name": "computer_list_windows",
-        "description": "List all interactive, visible Windows application windows on the desktop.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "include_system": {
-                    "type": "boolean",
-                    "description": "Whether to include background/system handles (default false)"
-                }
-            }
-        }
-    },
-    {
-        "name": "computer_activate_window",
-        "description": "Bring a target window to the foreground by its title substring or HWND ID.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "target": {
-                    "type": "string",
-                    "description": "Window title substring or numeric HWND ID"
-                }
-            },
-            "required": ["target"]
-        }
-    },
-    {
-        "name": "computer_get_window_state",
-        "description": "Capture the screenshot and state of a target window (even if partially occluded).",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "target": {
-                    "type": "string",
-                    "description": "Window title substring or numeric HWND ID"
-                },
-                "save_path": {
-                    "type": "string",
-                    "description": "Optional file path to save the screenshot PNG image directly"
-                }
-            },
-            "required": ["target"]
-        }
-    },
-    {
-        "name": "computer_click",
-        "description": "Click coordinates inside a window.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "target": {
-                    "type": "string",
-                    "description": "Window title substring or numeric HWND ID"
-                },
-                "x": {
-                    "type": "integer",
-                    "description": "Window-relative X coordinate"
-                },
-                "y": {
-                    "type": "integer",
-                    "description": "Window-relative Y coordinate"
-                },
-                "mouse_button": {
-                    "type": "string",
-                    "enum": ["left", "right", "middle"],
-                    "default": "left"
-                },
-                "click_count": {
-                    "type": "integer",
-                    "default": 1
-                }
-            },
-            "required": ["target", "x", "y"]
-        }
-    },
-    {
-        "name": "computer_click_center",
-        "description": "Convenience tool: click exactly in the geometric center of the target window (e.g. video player toggle).",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "target": {
-                    "type": "string",
-                    "description": "Window title substring or numeric HWND ID"
-                },
-                "mouse_button": {
-                    "type": "string",
-                    "enum": ["left", "right", "middle"],
-                    "default": "left"
-                }
-            },
-            "required": ["target"]
-        }
-    },
-    {
-        "name": "computer_type_text",
-        "description": "Type text into the currently focused control in the target window.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "target": {
-                    "type": "string",
-                    "description": "Window title substring or numeric HWND ID"
-                },
-                "text": {
-                    "type": "string",
-                    "description": "Text to type"
-                }
-            },
-            "required": ["target", "text"]
-        }
-    },
-    {
-        "name": "computer_press_key",
-        "description": "Press a key or shortcut chord (e.g. 'Return', 'Tab', 'Escape', 'Control_L+a').",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "target": {
-                    "type": "string",
-                    "description": "Window title substring or numeric HWND ID"
-                },
-                "key": {
-                    "type": "string",
-                    "description": "Key or chord string"
-                }
-            },
-            "required": ["target", "key"]
-        }
-    },
-    {
-        "name": "computer_scroll",
-        "description": "Scroll at coordinates in the target window.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "target": {
-                    "type": "string",
-                    "description": "Window title substring or numeric HWND ID"
-                },
-                "x": { "type": "integer" },
-                "y": { "type": "integer" },
-                "scroll_x": { "type": "integer", "default": 0 },
-                "scroll_y": { "type": "integer", "default": 600 }
-            },
-            "required": ["target", "x", "y"]
-        }
-    },
-    {
-        "name": "computer_restore_cursor",
-        "description": "Emergency utility: unclip and restore standard Windows mouse cursor.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {}
-        }
-    }
-]
+try:
+    from mcp.server.mcpserver import MCPServer
+    from mcp.types import CallToolResult, TextContent
+    _MCP_SDK_AVAILABLE = True
+except ImportError:
+    _MCP_SDK_AVAILABLE = False
 
-def handle_call(name: str, arguments: Dict[str, Any]) -> Any:
-    if name == "computer_restore_cursor":
-        res = restore_system_cursor()
-        return {"status": "ok", "cursor_restored": res}
 
-    with ComputerUseClient() as cua:
-        if name == "computer_list_windows":
-            inc_sys = arguments.get("include_system", False)
-            windows = cua.list_windows(filter_system=not inc_sys)
-            return {"windows": windows, "count": len(windows)}
+def _json(data: Any) -> str:
+    return json.dumps(data, ensure_ascii=False, indent=2)
 
-        target = arguments.get("target")
 
-        if name == "computer_activate_window":
+def build_mcp_server():
+    server = MCPServer(
+        name="win-computer-use",
+        version="1.0.0",
+        instructions=(
+            "Interact with Microsoft Windows desktop GUI, applications, and windows via native CUA bridge. "
+            "Supports window enumeration, activation, clicking, typing, screenshots, and cursor recovery."
+        )
+    )
+
+    @server.tool(
+        name="computer_list_windows",
+        description="List all interactive, visible Windows application windows on the desktop."
+    )
+    def computer_list_windows(include_system: bool = False) -> str:
+        with ComputerUseClient() as cua:
+            windows = cua.list_windows(filter_system=not include_system)
+            return _json({"windows": windows, "count": len(windows)})
+
+    @server.tool(
+        name="computer_activate_window",
+        description="Bring a target window to the foreground by its title substring or HWND ID."
+    )
+    def computer_activate_window(target: str) -> str:
+        with ComputerUseClient() as cua:
             cua.activate_window(target)
-            return {"status": "ok", "activated": target}
+            return _json({"status": "ok", "activated": target})
 
-        if name == "computer_click":
-            cua.click(
-                target,
-                x=arguments["x"],
-                y=arguments["y"],
-                mouse_button=arguments.get("mouse_button", "left"),
-                click_count=arguments.get("click_count", 1)
-            )
-            return {"status": "ok", "clicked": {"target": target, "x": arguments["x"], "y": arguments["y"]}}
-
-        if name == "computer_click_center":
-            res = cua.click_center(
-                target,
-                mouse_button=arguments.get("mouse_button", "left")
-            )
-            return {"status": "ok", "clicked_center": res}
-
-        if name == "computer_type_text":
-            cua.type_text(target, arguments["text"])
-            return {"status": "ok", "typed": arguments["text"]}
-
-        if name == "computer_press_key":
-            cua.press_key(target, arguments["key"])
-            return {"status": "ok", "pressed": arguments["key"]}
-
-        if name == "computer_scroll":
-            cua.scroll(
-                target,
-                x=arguments["x"],
-                y=arguments["y"],
-                scroll_x=arguments.get("scroll_x", 0),
-                scroll_y=arguments.get("scroll_y", 600)
-            )
-            return {"status": "ok", "scrolled": True}
-
-        if name == "computer_get_window_state":
-            save_path = arguments.get("save_path")
+    @server.tool(
+        name="computer_get_window_state",
+        description="Capture screenshot and state bounds of a target window."
+    )
+    def computer_get_window_state(target: str, save_path: str = "") -> str:
+        with ComputerUseClient() as cua:
             if save_path:
                 meta = cua.save_screenshot(target, save_path)
-                return {"status": "ok", "screenshot": meta}
+                return _json({"status": "ok", "screenshot": meta})
             else:
                 state = cua.get_window_state(target, include_screenshot=True)
                 s = state.get("screenshots", [{}])[0]
-                return {
+                return _json({
                     "status": "ok",
                     "id": s.get("id"),
                     "width": s.get("width"),
                     "height": s.get("height"),
                     "originX": s.get("originX"),
                     "originY": s.get("originY")
-                }
+                })
 
-    raise ValueError(f"Unknown tool: {name}")
+    @server.tool(
+        name="computer_click",
+        description="Click coordinates inside a window."
+    )
+    def computer_click(target: str, x: int, y: int, mouse_button: str = "left", click_count: int = 1) -> str:
+        with ComputerUseClient() as cua:
+            cua.click(target, x=x, y=y, mouse_button=mouse_button, click_count=click_count)
+            return _json({"status": "ok", "clicked": {"target": target, "x": x, "y": y}})
+
+    @server.tool(
+        name="computer_click_center",
+        description="Click at the geometric center of a target window."
+    )
+    def computer_click_center(target: str, mouse_button: str = "left") -> str:
+        with ComputerUseClient() as cua:
+            res = cua.click_center(target, mouse_button=mouse_button)
+            return _json({"status": "ok", "clicked_center": res})
+
+    @server.tool(
+        name="computer_type_text",
+        description="Type text into the currently focused control in the target window."
+    )
+    def computer_type_text(target: str, text: str) -> str:
+        with ComputerUseClient() as cua:
+            cua.type_text(target, text)
+            return _json({"status": "ok", "typed": text})
+
+    @server.tool(
+        name="computer_press_key",
+        description="Press a key or keyboard shortcut chord (e.g. 'Return', 'Tab', 'Control_L+a')."
+    )
+    def computer_press_key(target: str, key: str) -> str:
+        with ComputerUseClient() as cua:
+            cua.press_key(target, key)
+            return _json({"status": "ok", "pressed": key})
+
+    @server.tool(
+        name="computer_scroll",
+        description="Scroll at coordinates in the target window."
+    )
+    def computer_scroll(target: str, x: int, y: int, scroll_x: int = 0, scroll_y: int = 600) -> str:
+        with ComputerUseClient() as cua:
+            cua.scroll(target, x=x, y=y, scroll_x=scroll_x, scroll_y=scroll_y)
+            return _json({"status": "ok", "scrolled": True})
+
+    @server.tool(
+        name="computer_restore_cursor",
+        description="Emergency utility: unclip and restore standard Windows hardware mouse cursor."
+    )
+    def computer_restore_cursor() -> str:
+        res = restore_system_cursor()
+        return _json({"status": "ok", "cursor_restored": res})
+
+    return server
+
 
 def main():
-    while True:
-        line = sys.stdin.readline()
-        if not line:
-            break
-        line = line.strip()
-        if not line:
-            continue
-
-        try:
-            req = json.loads(line)
-        except Exception:
-            continue
-
-        method = req.get("method")
-        msg_id = req.get("id")
-
-        if method == "initialize":
-            resp = {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {
-                        "tools": {"listChanged": True}
-                    },
-                    "serverInfo": {
-                        "name": "win-computer-use",
-                        "version": "1.0.0"
-                    }
-                }
-            }
-            sys.stdout.write(json.dumps(resp) + "\n")
-            sys.stdout.flush()
-
-        elif method == "notifications/initialized":
-            pass
-
-        elif method == "tools/list":
-            resp = {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {
-                    "tools": TOOLS
-                }
-            }
-            sys.stdout.write(json.dumps(resp) + "\n")
-            sys.stdout.flush()
-
-        elif method == "tools/call":
-            params = req.get("params", {})
-            name = params.get("name")
-            args = params.get("arguments", {})
-
+    if _MCP_SDK_AVAILABLE:
+        server = build_mcp_server()
+        server.run(transport="stdio")
+    else:
+        # Fallback raw loop with ping and unbuffered I/O
+        import io
+        sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8")
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+        while True:
+            line = sys.stdin.readline()
+            if not line:
+                break
+            line = line.strip()
+            if not line:
+                continue
             try:
-                result_data = handle_call(name, args)
-                resp = {
-                    "jsonrpc": "2.0",
-                    "id": msg_id,
-                    "result": {
-                        "content": [
-                            {"type": "text", "text": json.dumps(result_data, ensure_ascii=False, indent=2)}
-                        ],
-                        "isError": False
-                    }
-                }
-            except Exception as e:
-                resp = {
-                    "jsonrpc": "2.0",
-                    "id": msg_id,
-                    "result": {
-                        "content": [
-                            {"type": "text", "text": f"Error: {e}\n{traceback.format_exc()}"}
-                        ],
-                        "isError": True
-                    }
-                }
+                req = json.loads(line)
+            except Exception:
+                continue
 
-            sys.stdout.write(json.dumps(resp) + "\n")
-            sys.stdout.flush()
+            method = req.get("method")
+            msg_id = req.get("id")
+
+            if method == "ping":
+                resp = {"jsonrpc": "2.0", "id": msg_id, "result": {}}
+                sys.stdout.write(json.dumps(resp) + "\n")
+                sys.stdout.flush()
+            elif method == "initialize":
+                resp = {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "result": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {"tools": {"listChanged": True}},
+                        "serverInfo": {"name": "win-computer-use", "version": "1.0.0"}
+                    }
+                }
+                sys.stdout.write(json.dumps(resp) + "\n")
+                sys.stdout.flush()
+            elif method == "notifications/initialized":
+                pass
+            elif msg_id is not None:
+                resp = {"jsonrpc": "2.0", "id": msg_id, "result": {}}
+                sys.stdout.write(json.dumps(resp) + "\n")
+                sys.stdout.flush()
+
 
 if __name__ == "__main__":
     main()
