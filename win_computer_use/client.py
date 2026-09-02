@@ -272,13 +272,47 @@ class ComputerUseClient:
                     return w
             return None
 
-        query_lower = query.lower()
+        query_str = str(query).strip()
+
+        # 0. Match by 1-based list index (e.g. "#1", "#6")
+        if query_str.startswith("#") and query_str[1:].isdigit():
+            idx = int(query_str[1:]) - 1
+            if 0 <= idx < len(windows):
+                return windows[idx]
+
+        # 1. Match by numeric or hex HWND ID string (e.g. "132290" or "0x204a2")
+        target_id = None
+        if query_str.isdigit():
+            target_id = int(query_str)
+        elif query_str.lower().startswith("0x"):
+            try:
+                target_id = int(query_str, 16)
+            except ValueError:
+                pass
+
+        if target_id is not None:
+            for w in windows:
+                if w.get("id") == target_id:
+                    return w
+
+        # 2. Match exact title first (case-insensitive)
+        query_lower = query_str.lower()
+        for w in windows:
+            if w.get("title", "").strip().lower() == query_lower:
+                return w
+
+        # 3. Match title substring
         for w in windows:
             if query_lower in w.get("title", "").lower():
                 return w
+
+        # 4. Match app / process name substring (handles 'chrome', 'chrome.exe', 'process:C:\...\app.exe')
+        query_no_ext = query_lower[:-4] if query_lower.endswith(".exe") else query_lower
         for w in windows:
-            if query_lower in w.get("app", "").lower():
+            app_raw = w.get("app", "").lower()
+            if query_lower in app_raw or query_no_ext in app_raw:
                 return w
+
         return None
 
     def _resolve_window(self, target: Union[int, str, Dict[str, Any]]) -> Dict[str, Any]:
