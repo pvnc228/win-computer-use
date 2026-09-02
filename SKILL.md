@@ -7,6 +7,12 @@ description: Control and automate Microsoft Windows desktop applications via Ope
 
 This skill enables Antigravity and other AI coding assistants to interact with desktop GUI applications on Windows 10/11 using the high-performance OpenAI CUA helper.
 
+## Prerequisites
+1. Windows 10 / 11 (x64)
+2. Python 3.10+ (standard library only, zero pip dependencies)
+3. OpenAI Codex or ChatGPT Desktop installed (the helper `codex-computer-use.exe` is auto-discovered in `%LOCALAPPDATA%\OpenAI\Codex`).
+   * No active subscription or cloud calls are needed; the engine runs strictly on the local machine via Win32/UIA.
+
 ## Capabilities
 - **Window Enumeration**: List open visible application windows (`list_windows`).
 - **Window Activation**: Bring target windows to the foreground (`activate_window`).
@@ -15,7 +21,7 @@ This skill enables Antigravity and other AI coding assistants to interact with d
 - **Auto-Approval**: Handles app authorization challenges transparently.
 - **Cursor Guardian**: Automatically recovers the hardware mouse cursor on turn exit or error.
 
-## CLI Usage
+## Quick CLI Reference
 
 ```powershell
 # List active windows
@@ -46,23 +52,9 @@ python -m win_computer_use cycle --delay 1.0
 python -m win_computer_use restore-cursor
 ```
 
-## Python API Usage
-
-```python
-from win_computer_use import ComputerUseClient
-
-with ComputerUseClient() as cua:
-    windows = cua.list_windows()
-    target = cua.find_window("Chrome")
-    if target:
-        cua.activate_window(target)
-        cua.click_center(target)
-        cua.save_screenshot(target, "chrome.png")
-```
-
 ## MCP Server Integration
 
-Add to your MCP configuration (`mcp_config.json` or `config.toml`):
+Add to your MCP configuration (`mcp_config.json`):
 
 ```json
 {

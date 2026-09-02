@@ -45,8 +45,39 @@ class SECURITY_ATTRIBUTES(ctypes.Structure):
         ('bInheritHandle', wintypes.BOOL)
     ]
 
-DEFAULT_HELPER_PATH = r"C:\Users\mist8\AppData\Local\OpenAI\Codex\runtimes\cua_node\2c6075088d3180ec\bin\node_modules\@oai\sky\bin\windows\codex-computer-use.exe"
-DEFAULT_CODEX_BIN = r"C:\Users\mist8\AppData\Local\OpenAI\Codex\bin\87e5fb3433dabab1"
+def find_cua_helper() -> Optional[str]:
+    """Auto-discovers codex-computer-use.exe from OpenAI Codex runtimes."""
+    if os.environ.get("CODEX_CUA_HELPER_PATH"):
+        return os.environ["CODEX_CUA_HELPER_PATH"]
+    
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    if local_app_data:
+        import glob
+        pattern = os.path.join(
+            local_app_data, "OpenAI", "Codex", "runtimes", "cua_node", "*",
+            "bin", "node_modules", "@oai", "sky", "bin", "windows", "codex-computer-use.exe"
+        )
+        matches = glob.glob(pattern)
+        if matches:
+            # Pick latest modified if multiple
+            matches.sort(key=os.path.getmtime, reverse=True)
+            return matches[0]
+    return None
+
+def find_codex_bin() -> Optional[str]:
+    """Auto-discovers Codex CLI bin folder containing codex.exe."""
+    if os.environ.get("CODEX_BIN_PATH"):
+        return os.environ["CODEX_BIN_PATH"]
+
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    if local_app_data:
+        import glob
+        pattern = os.path.join(local_app_data, "OpenAI", "Codex", "bin", "*", "codex.exe")
+        matches = glob.glob(pattern)
+        if matches:
+            matches.sort(key=os.path.getmtime, reverse=True)
+            return os.path.dirname(matches[0])
+    return None
 
 class ComputerUseClient:
     """
@@ -55,11 +86,18 @@ class ComputerUseClient:
     """
 
     def __init__(self, helper_path: Optional[str] = None, codex_bin: Optional[str] = None):
-        self.helper_path = helper_path or os.environ.get("CODEX_CUA_HELPER_PATH", DEFAULT_HELPER_PATH)
-        self.codex_bin = codex_bin or os.environ.get("CODEX_BIN_PATH", DEFAULT_CODEX_BIN)
+        self.helper_path = helper_path or find_cua_helper()
+        self.codex_bin = codex_bin or find_codex_bin()
         
-        if not os.path.exists(self.helper_path):
-            raise FileNotFoundError(f"codex-computer-use.exe not found at: {self.helper_path}")
+        if not self.helper_path or not os.path.exists(self.helper_path):
+            raise FileNotFoundError(
+                "codex-computer-use.exe was not found on this system.\n\n"
+                "Prerequisites:\n"
+                "1. Install OpenAI Codex / ChatGPT Desktop for Windows.\n"
+                "2. The helper binary is installed automatically under:\n"
+                "   %LOCALAPPDATA%\\OpenAI\\Codex\\runtimes\\cua_node\\<hash>\\bin\\node_modules\\@oai\\sky\\bin\\windows\\codex-computer-use.exe\n"
+                "3. Alternatively, specify CODEX_CUA_HELPER_PATH environment variable."
+            )
 
         self._process_info: Optional[PROCESS_INFORMATION] = None
         self._h_stdin_write: Optional[wintypes.HANDLE] = None
