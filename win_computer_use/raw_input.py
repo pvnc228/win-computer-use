@@ -202,6 +202,14 @@ def execute_macro(actions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             dur = float(act.get("duration", 0.15))
             res = shoot(b, dur)
             results.append({"action": "shoot", "button": b, "duration": dur, "ok": res})
+        elif atype in ("press", "press_key"):
+            k = act.get("key", "space")
+            res = hold_key(k, 0.05)
+            results.append({"action": "press_key", "key": k, "ok": res})
+        elif atype in ("click", "mouse_click"):
+            b = act.get("button", "left")
+            res = shoot(b, 0.05)
+            results.append({"action": "click", "button": b, "ok": res})
         elif atype in ("sleep", "wait"):
             dur = float(act.get("duration", 0.1))
             time.sleep(dur)
