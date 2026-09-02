@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "win-computer-use"
+version = "0.1.0"
+description = "High-performance Windows Computer Use Bridge leveraging OpenAI Codex CUA engine"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+win-computer-use = "win_computer_use.cli:main"
+win-computer-use-mcp = "mcp_server:main"
