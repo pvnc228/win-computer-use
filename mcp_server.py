@@ -117,6 +117,15 @@ def build_mcp_server():
             return _json({"status": "ok", "scrolled": True})
 
     @server.tool(
+        name="computer_drag",
+        description="Drag mouse from starting coordinates to ending coordinates in the target window."
+    )
+    def computer_drag(target: str, from_x: int, from_y: int, to_x: int, to_y: int) -> str:
+        with ComputerUseClient() as cua:
+            cua.drag(target, from_x=from_x, from_y=from_y, to_x=to_x, to_y=to_y)
+            return _json({"status": "ok", "dragged": {"from": [from_x, from_y], "to": [to_x, to_y]}})
+
+    @server.tool(
         name="computer_restore_cursor",
         description="Emergency utility: unclip and restore standard Windows hardware mouse cursor."
     )

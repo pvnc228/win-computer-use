@@ -294,25 +294,108 @@ class ComputerUseClient:
         self.request("activate_window", {"window": w})
         return True
 
+    def _capture_win32_gdi(self, hwnd: int) -> Optional[Dict[str, Any]]:
+        """Direct Win32 GDI screen capture fallback for browser windows or policy restrictions."""
+        try:
+            user32 = ctypes.windll.user32
+            gdi32 = ctypes.windll.gdi32
+            user32.SetThreadDesktop(user32.OpenDesktopW('Default', 0, False, 0x1FF))
+
+            rect = (ctypes.c_long * 4)()
+            user32.GetWindowRect(hwnd, rect)
+            w = max(rect[2] - rect[0], 1)
+            h = max(rect[3] - rect[1], 1)
+
+            hScreenDC = user32.GetDC(0)
+            hMemDC = gdi32.CreateCompatibleDC(hScreenDC)
+            hBmp = gdi32.CreateCompatibleBitmap(hScreenDC, w, h)
+            gdi32.SelectObject(hMemDC, hBmp)
+            gdi32.BitBlt(hMemDC, 0, 0, w, h, hScreenDC, rect[0], rect[1], 0x00CC0020)
+
+            class BITMAPINFOHEADER(ctypes.Structure):
+                _fields_ = [
+                    ('biSize', wintypes.DWORD), ('biWidth', wintypes.LONG), ('biHeight', wintypes.LONG),
+                    ('biPlanes', wintypes.WORD), ('biBitCount', wintypes.WORD), ('biCompression', wintypes.DWORD),
+                    ('biSizeImage', wintypes.DWORD), ('biXPelsPerMeter', wintypes.LONG), ('biYPelsPerMeter', wintypes.LONG),
+                    ('biClrUsed', wintypes.DWORD), ('biClrImportant', wintypes.DWORD)
+                ]
+
+            bmi = BITMAPINFOHEADER()
+            bmi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+            bmi.biWidth = w
+            bmi.biHeight = -h
+            bmi.biPlanes = 1
+            bmi.biBitCount = 32
+            bmi.biCompression = 0
+
+            buf = ctypes.create_string_buffer(w * h * 4)
+            gdi32.GetDIBits(hMemDC, hBmp, 0, h, buf, ctypes.byref(bmi), 0)
+
+            gdi32.DeleteObject(hBmp)
+            gdi32.DeleteDC(hMemDC)
+            user32.ReleaseDC(0, hScreenDC)
+
+            raw_bytes = buf.raw
+            try:
+                import io
+                from PIL import Image
+                img = Image.frombuffer('RGBA', (w, h), raw_bytes, 'raw', 'BGRA', 0, 1).convert('RGB')
+                bio = io.BytesIO()
+                img.save(bio, format="PNG")
+                b64_str = base64.b64encode(bio.getvalue()).decode("ascii")
+                mime = "image/png"
+            except ImportError:
+                import struct
+                file_size = 54 + len(raw_bytes)
+                hdr = struct.pack('<2sIHHI', b'BM', file_size, 0, 0, 54)
+                dhdr = struct.pack('<IIIHHIIIIII', 40, w, -h, 1, 32, 0, len(raw_bytes), 0, 0, 0, 0)
+                bmp_data = hdr + dhdr + raw_bytes
+                b64_str = base64.b64encode(bmp_data).decode("ascii")
+                mime = "image/bmp"
+
+            return {
+                "id": hwnd,
+                "width": w,
+                "height": h,
+                "originX": rect[0],
+                "originY": rect[1],
+                "url": f"data:{mime};base64,{b64_str}"
+            }
+        except Exception:
+            return None
+
     def get_window_state(self, target: Union[int, str, Dict[str, Any]], 
                          include_screenshot: bool = True,
                          include_text: bool = False) -> Dict[str, Any]:
         w = self._resolve_window(target)
-        return self.request("get_window_state", {
-            "window": w,
-            "include_screenshot": include_screenshot,
-            "include_text": include_text
-        })
+        try:
+            return self.request("get_window_state", {
+                "window": w,
+                "include_screenshot": include_screenshot,
+                "include_text": include_text
+            })
+        except Exception:
+            if include_screenshot:
+                s = self._capture_win32_gdi(w["id"])
+                if s:
+                    return {
+                        "window": w,
+                        "screenshots": [s]
+                    }
+            raise
 
     def save_screenshot(self, target: Union[int, str, Dict[str, Any]], out_path: str) -> Dict[str, Any]:
-        state = self.get_window_state(target, include_screenshot=True, include_text=False)
+        w = self._resolve_window(target)
+        self.activate_window(w)
+        time.sleep(0.15)
+        state = self.get_window_state(w, include_screenshot=True, include_text=False)
         screenshots = state.get("screenshots", [])
         if not screenshots:
             raise RuntimeError(f"No screenshot returned for window: {target}")
 
         s0 = screenshots[0]
         url = s0.get("url", "")
-        if url.startswith("data:image/png;base64,"):
+        if url.startswith("data:image/"):
             b64_str = url.split(",", 1)[1]
             os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
             with open(out_path, "wb") as f:
@@ -322,8 +405,8 @@ class ComputerUseClient:
             "id": s0.get("id"),
             "width": s0.get("width"),
             "height": s0.get("height"),
-            "originX": s0.get("originX"),
-            "originY": s0.get("originY")
+            "originX": s0.get("originX", 0),
+            "originY": s0.get("originY", 0)
         }
 
     def click(self, target: Union[int, str, Dict[str, Any]], 

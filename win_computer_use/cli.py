@@ -46,6 +46,22 @@ def main():
     p_shot.add_argument("target", help="Window title substring or HWND ID")
     p_shot.add_argument("--out", default="screenshot.png", help="Output PNG path")
 
+    # scroll
+    p_scroll = subparsers.add_parser("scroll", help="Scroll at coordinates inside window")
+    p_scroll.add_argument("target", help="Window title substring or HWND ID")
+    p_scroll.add_argument("--x", type=int, required=True, help="X coordinate")
+    p_scroll.add_argument("--y", type=int, required=True, help="Y coordinate")
+    p_scroll.add_argument("--scroll-x", type=int, default=0, help="Horizontal scroll offset")
+    p_scroll.add_argument("--scroll-y", type=int, default=600, help="Vertical scroll offset")
+
+    # drag
+    p_drag = subparsers.add_parser("drag", help="Drag mouse from coordinates to coordinates")
+    p_drag.add_argument("target", help="Window title substring or HWND ID")
+    p_drag.add_argument("--from-x", type=int, required=True, help="Start X")
+    p_drag.add_argument("--from-y", type=int, required=True, help="Start Y")
+    p_drag.add_argument("--to-x", type=int, required=True, help="End X")
+    p_drag.add_argument("--to-y", type=int, required=True, help="End Y")
+
     # cycle
     p_cycle = subparsers.add_parser("cycle", help="Cycle through all active windows with a delay")
     p_cycle.add_argument("--delay", type=float, default=1.0, help="Delay in seconds between activations")
@@ -98,6 +114,14 @@ def main():
         elif args.command == "screenshot":
             meta = cua.save_screenshot(args.target, args.out)
             print(f"Screenshot saved to: {meta['path']} ({meta['width']}x{meta['height']})")
+
+        elif args.command == "scroll":
+            cua.scroll(args.target, args.x, args.y, scroll_x=args.scroll_x, scroll_y=args.scroll_y)
+            print(f"Scrolled at ({args.x}, {args.y}) in '{args.target}'")
+
+        elif args.command == "drag":
+            cua.drag(args.target, args.from_x, args.from_y, args.to_x, args.to_y)
+            print(f"Dragged from ({args.from_x}, {args.from_y}) to ({args.to_x}, {args.to_y}) in '{args.target}'")
 
         elif args.command == "cycle":
             windows = cua.list_windows()
