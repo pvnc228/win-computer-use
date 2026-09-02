@@ -68,10 +68,28 @@ python -m win_computer_use type "Notepad" "Hello from Antigravity"
 # 7. Press keyboard shortcut / chord:
 python -m win_computer_use press "Chrome" "Control_L+w"
 
-# 8. Cycle through all open interactive windows (1s delay each):
+# 8. Drag from coordinates to coordinates:
+python -m win_computer_use drag "App" --from-x 100 --from-y 200 --to-x 400 --to-y 500
+
+# 9. Relative mouse aiming (FPS / 3D camera look):
+python -m win_computer_use aim "Shooter" --dx 120 --dy -15
+
+# 10. Continuous key hold with hardware DirectX scan codes (e.g. WASD movement):
+python -m win_computer_use hold "Shooter" --key w --duration 1.5
+
+# 11. Weapon burst / rapid fire:
+python -m win_computer_use shoot "Shooter" --button left --duration 0.2
+
+# 12. Atomic macro sequence execution (bypasses LLM network turn latency):
+python -m win_computer_use macro "Shooter" '[{"action":"hold_key","key":"w","duration":1.0},{"action":"aim","dx":80,"dy":0},{"action":"shoot","duration":0.2}]'
+
+# 13. High-speed cropped screenshot (e.g. crosshairs, minimap):
+python -m win_computer_use screenshot "Shooter" --out crosshair.png --crop 900,500,120,120
+
+# 14. Cycle through all open interactive windows (1s delay each):
 python -m win_computer_use cycle --delay 1.0
 
-# 9. Emergency cursor restore:
+# 15. Emergency cursor restore:
 python -m win_computer_use restore-cursor
 ```
 
@@ -96,6 +114,11 @@ with ComputerUseClient() as cua:
         # 4. Capture screenshot
         meta = cua.save_screenshot(target, "chrome_state.png")
         print(f"Screenshot saved: {meta['path']} ({meta['width']}x{meta['height']})")
+
+    # 5. Low-latency gaming / DirectInput actions:
+    cua.hold_key(target, "w", duration=1.0)
+    cua.aim(target, dx=100, dy=0)
+    cua.shoot(target, button="left", duration=0.2)
 ```
 
 ---
@@ -109,7 +132,7 @@ To add Windows Computer Use capabilities to your AI agent (Antigravity, Claude D
   "mcpServers": {
     "win-computer-use": {
       "command": "python",
-      "args": ["C:/Users/mist8/.gemini/antigravity/scratch/win-computer-use/mcp_server.py"]
+      "args": ["C:/path/to/win-computer-use/mcp_server.py"]
     }
   }
 }
@@ -124,6 +147,12 @@ To add Windows Computer Use capabilities to your AI agent (Antigravity, Claude D
 - `computer_type_text` — Type text into active input focus.
 - `computer_press_key` — Send key or chord shortcut (e.g. `Return`, `Tab`, `Escape`).
 - `computer_scroll` — Scroll by horizontal and vertical delta.
+- `computer_drag` — Drag mouse from coordinates to coordinates.
+- `computer_aim` — Relative mouse delta for 3D games / FPS camera aiming.
+- `computer_hold_key` — Hold keyboard key with hardware DirectX scan codes (WASD movement).
+- `computer_mouse_down` / `computer_mouse_up` — Press and hold or release mouse buttons.
+- `computer_shoot` — Fire weapon bursts for specified duration.
+- `computer_run_macro` — Execute atomic composite action sequences without LLM turn latency.
 - `computer_restore_cursor` — Emergency hardware cursor restoration.
 
 ---
