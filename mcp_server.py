@@ -126,6 +126,60 @@ def build_mcp_server():
             return _json({"status": "ok", "dragged": {"from": [from_x, from_y], "to": [to_x, to_y]}})
 
     @server.tool(
+        name="computer_aim",
+        description="Relative mouse delta for 3D games / FPS camera aiming (bypasses absolute window coords)."
+    )
+    def computer_aim(dx: int, dy: int, target: str = "") -> str:
+        with ComputerUseClient() as cua:
+            res = cua.aim(target if target else None, dx=dx, dy=dy)
+            return _json({"status": "ok", "aim_moved": {"dx": dx, "dy": dy, "result": res}})
+
+    @server.tool(
+        name="computer_hold_key",
+        description="Hold a keyboard key down with hardware DirectX scan codes (e.g. WASD character movement)."
+    )
+    def computer_hold_key(key: str, duration: float = 0.5, target: str = "") -> str:
+        with ComputerUseClient() as cua:
+            res = cua.hold_key(target if target else None, key=key, duration=duration)
+            return _json({"status": "ok", "held_key": {"key": key, "duration": duration, "result": res}})
+
+    @server.tool(
+        name="computer_mouse_down",
+        description="Press and hold a mouse button down (e.g. charging a shot or holding aim)."
+    )
+    def computer_mouse_down(button: str = "left", target: str = "") -> str:
+        with ComputerUseClient() as cua:
+            res = cua.mouse_down(target if target else None, button=button)
+            return _json({"status": "ok", "mouse_down": button, "result": res})
+
+    @server.tool(
+        name="computer_mouse_up",
+        description="Release a held mouse button."
+    )
+    def computer_mouse_up(button: str = "left", target: str = "") -> str:
+        with ComputerUseClient() as cua:
+            res = cua.mouse_up(target if target else None, button=button)
+            return _json({"status": "ok", "mouse_up": button, "result": res})
+
+    @server.tool(
+        name="computer_shoot",
+        description="Fire a weapon burst by holding mouse button down for duration seconds."
+    )
+    def computer_shoot(button: str = "left", duration: float = 0.15, target: str = "") -> str:
+        with ComputerUseClient() as cua:
+            res = cua.shoot(target if target else None, button=button, duration=duration)
+            return _json({"status": "ok", "fired": {"button": button, "duration": duration, "result": res}})
+
+    @server.tool(
+        name="computer_run_macro",
+        description="Execute an atomic list of gaming or automation actions (aim, hold_key, shoot, sleep) without LLM latency jitter."
+    )
+    def computer_run_macro(actions: list, target: str = "") -> str:
+        with ComputerUseClient() as cua:
+            results = cua.run_macro(target if target else None, actions)
+            return _json({"status": "ok", "macro_results": results})
+
+    @server.tool(
         name="computer_restore_cursor",
         description="Emergency utility: unclip and restore standard Windows hardware mouse cursor."
     )

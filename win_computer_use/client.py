@@ -494,3 +494,46 @@ class ComputerUseClient:
             "to_x": to_x,
             "to_y": to_y
         })
+
+    def aim(self, target: Optional[Union[int, str, Dict[str, Any]]], dx: int, dy: int) -> bool:
+        """Relative mouse delta movement for 3D games / FPS aiming."""
+        if target:
+            self.activate_window(target)
+        from .raw_input import mouse_move_relative
+        return mouse_move_relative(dx, dy)
+
+    def hold_key(self, target: Optional[Union[int, str, Dict[str, Any]]], key: str, duration: float = 0.5) -> bool:
+        """Holds a key down with hardware scan codes (e.g. WASD movement)."""
+        if target:
+            self.activate_window(target)
+        from .raw_input import hold_key
+        return hold_key(key, duration)
+
+    def mouse_down(self, target: Optional[Union[int, str, Dict[str, Any]]], button: str = "left") -> bool:
+        """Presses and holds mouse button."""
+        if target:
+            self.activate_window(target)
+        from .raw_input import mouse_down
+        return mouse_down(button)
+
+    def mouse_up(self, target: Optional[Union[int, str, Dict[str, Any]]], button: str = "left") -> bool:
+        """Releases mouse button."""
+        if target:
+            self.activate_window(target)
+        from .raw_input import mouse_up
+        return mouse_up(button)
+
+    def shoot(self, target: Optional[Union[int, str, Dict[str, Any]]], button: str = "left", duration: float = 0.15) -> bool:
+        """Fires weapon burst for duration seconds."""
+        if target:
+            self.activate_window(target)
+        from .raw_input import shoot
+        return shoot(button, duration)
+
+    def run_macro(self, target: Optional[Union[int, str, Dict[str, Any]]], actions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Executes an atomic list of gaming actions without LLM latency jitter."""
+        if target:
+            self.activate_window(target)
+        from .raw_input import execute_macro
+        return execute_macro(actions)
+
