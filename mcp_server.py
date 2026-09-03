@@ -3,6 +3,7 @@ import os
 import json
 import time
 import traceback
+import threading
 from typing import Any, Dict, Optional, List
 
 # Ensure project package is importable
@@ -24,21 +25,59 @@ def _json(data: Any) -> str:
 
 
 # =====================================================================
+# Shared Native Client Lifecycle for MCP Server
+# =====================================================================
+
+_CLIENT_LOCK = threading.RLock()
+_CLIENT_INSTANCE: Optional[ComputerUseClient] = None
+
+def get_client() -> ComputerUseClient:
+    """Returns a shared, lazily started ComputerUseClient instance for the MCP server."""
+    global _CLIENT_INSTANCE
+    with _CLIENT_LOCK:
+        if _CLIENT_INSTANCE is None:
+            _CLIENT_INSTANCE = ComputerUseClient()
+            _CLIENT_INSTANCE.start()
+        elif _CLIENT_INSTANCE._process_info is None:
+            _CLIENT_INSTANCE.start()
+        return _CLIENT_INSTANCE
+
+def reset_client():
+    """Stops the shared client and resets the singleton instance."""
+    global _CLIENT_INSTANCE
+    with _CLIENT_LOCK:
+        if _CLIENT_INSTANCE is not None:
+            try:
+                _CLIENT_INSTANCE.stop()
+            except Exception:
+                pass
+            _CLIENT_INSTANCE = None
+        restore_system_cursor()
+
+
+# =====================================================================
 # Native Tool Implementations (Shared between MCP SDK & Raw Fallback)
 # =====================================================================
 
 def tool_list_windows(include_system: bool = False) -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         windows = cua.list_windows(filter_system=not include_system)
         return _json({"windows": windows, "count": len(windows)})
+    finally:
+        restore_system_cursor()
 
 def tool_activate_window(target: str) -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         cua.activate_window(target)
         return _json({"status": "ok", "activated": target})
+    finally:
+        restore_system_cursor()
 
 def tool_get_window_state(target: str, save_path: str = "", crop: str = "") -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         if save_path:
             meta = cua.save_screenshot(target, save_path)
             if crop:
@@ -63,79 +102,121 @@ def tool_get_window_state(target: str, save_path: str = "", crop: str = "") -> s
                 "originX": s.get("originX"),
                 "originY": s.get("originY")
             })
+    finally:
+        restore_system_cursor()
 
 def tool_screenshot(target: str, out_path: str = "screenshot.png", crop: str = "") -> str:
     return tool_get_window_state(target, save_path=out_path, crop=crop)
 
 def tool_click(target: str, x: int, y: int, mouse_button: str = "left", click_count: int = 1) -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         cua.click(target, x=x, y=y, mouse_button=mouse_button, click_count=click_count)
         return _json({"status": "ok", "clicked": {"target": target, "x": x, "y": y, "button": mouse_button, "count": click_count}})
+    finally:
+        restore_system_cursor()
 
 def tool_click_center(target: str, mouse_button: str = "left", click_count: int = 1) -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         res = cua.click_center(target, mouse_button=mouse_button, click_count=click_count)
         return _json({"status": "ok", "clicked_center": res})
+    finally:
+        restore_system_cursor()
 
 def tool_type_text(target: str, text: str) -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         cua.type_text(target, text)
         return _json({"status": "ok", "typed": text})
+    finally:
+        restore_system_cursor()
 
 def tool_press_key(target: str, key: str) -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         cua.press_key(target, key)
         return _json({"status": "ok", "pressed": key})
+    finally:
+        restore_system_cursor()
 
 def tool_scroll(target: str, x: int, y: int, scroll_x: int = 0, scroll_y: int = 600) -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         cua.scroll(target, x=x, y=y, scroll_x=scroll_x, scroll_y=scroll_y)
         return _json({"status": "ok", "scrolled": True})
+    finally:
+        restore_system_cursor()
 
 def tool_drag(target: str, from_x: int, from_y: int, to_x: int, to_y: int) -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         cua.drag(target, from_x=from_x, from_y=from_y, to_x=to_x, to_y=to_y)
         return _json({"status": "ok", "dragged": {"from": [from_x, from_y], "to": [to_x, to_y]}})
+    finally:
+        restore_system_cursor()
 
 def tool_aim(dx: int, dy: int, target: str = "") -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         res = cua.aim(target if target else None, dx=dx, dy=dy)
         return _json({"status": "ok", "aim_moved": {"dx": dx, "dy": dy, "result": res}})
+    finally:
+        restore_system_cursor()
 
 def tool_hold_key(key: str, duration: float = 0.5, target: str = "") -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         res = cua.hold_key(target if target else None, key=key, duration=duration)
         return _json({"status": "ok", "held_key": {"key": key, "duration": duration, "result": res}})
+    finally:
+        restore_system_cursor()
 
 def tool_mouse_down(button: str = "left", target: str = "") -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         res = cua.mouse_down(target if target else None, button=button)
         return _json({"status": "ok", "mouse_down": button, "result": res})
+    finally:
+        restore_system_cursor()
 
 def tool_mouse_up(button: str = "left", target: str = "") -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         res = cua.mouse_up(target if target else None, button=button)
         return _json({"status": "ok", "mouse_up": button, "result": res})
+    finally:
+        restore_system_cursor()
 
 def tool_shoot(button: str = "left", duration: float = 0.15, target: str = "") -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         res = cua.shoot(target if target else None, button=button, duration=duration)
         return _json({"status": "ok", "fired": {"button": button, "duration": duration, "result": res}})
+    finally:
+        restore_system_cursor()
 
 def tool_run_macro(actions: list, target: str = "") -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         results = cua.run_macro(target if target else None, actions)
         return _json({"status": "ok", "macro_results": results})
+    finally:
+        restore_system_cursor()
 
 def tool_cycle_windows(delay: float = 1.0) -> str:
-    with ComputerUseClient() as cua:
+    try:
+        cua = get_client()
         wins = cua.list_windows()
         for w in wins:
             cua.activate_window(w)
             time.sleep(delay)
         return _json({"status": "ok", "cycled_count": len(wins)})
+    finally:
+        restore_system_cursor()
 
 def tool_restore_cursor() -> str:
+    reset_client()
     res = restore_system_cursor()
     return _json({"status": "ok", "cursor_restored": res})
 
@@ -463,7 +544,7 @@ def run_raw_stdio_server():
         elif method == "tools/call":
             params = req.get("params", {})
             t_name = params.get("name")
-            t_args = params.get("arguments", {})
+            t_args = params.get("arguments") or {}
 
             if t_name in TOOL_MAP:
                 try:
@@ -476,6 +557,7 @@ def run_raw_stdio_server():
                         }
                     }
                 except Exception as e:
+                    reset_client()
                     resp = {
                         "jsonrpc": "2.0",
                         "id": msg_id,

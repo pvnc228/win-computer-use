@@ -11,6 +11,7 @@ def _ensure_desktop():
     h_desk = user32.OpenDesktopW('Default', 0, False, 0x1FF)
     if h_desk:
         user32.SetThreadDesktop(h_desk)
+        user32.CloseDesktop(h_desk)
 
 class MOUSEINPUT(ctypes.Structure):
     _fields_ = [
@@ -75,6 +76,12 @@ VK_KEYS = {
     "tab": 0x09, "backspace": 0x08, "capslock": 0x14,
     "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27,
     "lshift": 0xA0, "rshift": 0xA1, "lctrl": 0xA2, "rctrl": 0xA3,
+    "insert": 0x2D, "delete": 0x2E, "home": 0x24, "end": 0x23,
+    "pageup": 0x21, "pagedown": 0x22,
+}
+
+EXTENDED_KEYS = {
+    0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2D, 0x2E, 0xA3, 0xA5
 }
 
 def resolve_key(key_name: str) -> (int, int):
@@ -127,22 +134,28 @@ def key_down(key: str) -> bool:
     """Presses and holds a keyboard key with hardware scan codes."""
     _ensure_desktop()
     vk, vsc = resolve_key(key)
+    flags = KEYEVENTF_SCANCODE
+    if vk in EXTENDED_KEYS:
+        flags |= KEYEVENTF_EXTENDEDKEY
     inp = INPUT()
     inp.type = INPUT_KEYBOARD
     inp.ki.wVk = vk
     inp.ki.wScan = vsc
-    inp.ki.dwFlags = KEYEVENTF_SCANCODE
+    inp.ki.dwFlags = flags
     return user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT)) == 1
 
 def key_up(key: str) -> bool:
     """Releases a keyboard key with hardware scan codes."""
     _ensure_desktop()
     vk, vsc = resolve_key(key)
+    flags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP
+    if vk in EXTENDED_KEYS:
+        flags |= KEYEVENTF_EXTENDEDKEY
     inp = INPUT()
     inp.type = INPUT_KEYBOARD
     inp.ki.wVk = vk
     inp.ki.wScan = vsc
-    inp.ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP
+    inp.ki.dwFlags = flags
     return user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT)) == 1
 
 def hold_key(key: str, duration: float) -> bool:
@@ -170,6 +183,9 @@ def execute_macro(actions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     results = []
     for act in actions:
+        if not isinstance(act, dict):
+            results.append({"error": f"Invalid action specification (must be a dict): {act}"})
+            continue
         atype = act.get("action", act.get("type", "")).lower()
         if atype in ("aim", "mouse_move_relative", "mouse_move"):
             dx = act.get("dx", 0)

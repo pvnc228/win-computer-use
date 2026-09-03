@@ -191,11 +191,22 @@ def main():
         elif args.command == "macro":
             import os
             raw_act = args.actions
-            if os.path.exists(raw_act):
-                with open(raw_act, "r", encoding="utf-8") as f:
-                    act_list = json.load(f)
-            else:
-                act_list = json.loads(raw_act)
+            try:
+                if os.path.exists(raw_act):
+                    with open(raw_act, "r", encoding="utf-8") as f:
+                        act_list = json.load(f)
+                else:
+                    act_list = json.loads(raw_act)
+            except Exception as e:
+                print(f"Error parsing macro JSON: {e}")
+                sys.exit(1)
+
+            if isinstance(act_list, dict):
+                act_list = [act_list]
+            elif not isinstance(act_list, list):
+                print(f"Error: Macro actions must be a list or dict, got {type(act_list).__name__}")
+                sys.exit(1)
+
             results = cua.run_macro(args.target if args.target else None, act_list)
             print("Macro execution completed:")
             for r in results:

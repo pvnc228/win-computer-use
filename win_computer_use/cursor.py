@@ -10,6 +10,7 @@ def restore_system_cursor() -> bool:
         h_desk = user32.OpenDesktopW("Default", 0, False, 0x01FF)
         if h_desk:
             user32.SetThreadDesktop(h_desk)
+            user32.CloseDesktop(h_desk)
 
         # 1. Unclip cursor
         user32.ClipCursor(None)
